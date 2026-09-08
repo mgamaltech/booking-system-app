@@ -10,6 +10,7 @@ use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Validation\ValidationException;
 
 class BookingService
 {
@@ -61,7 +62,13 @@ class BookingService
      */
     public function updateExistingBooking(Booking $booking, array $data): Booking
     {
-        $this->bookingRepository->update($data, $booking->id);
+        $updated = $this->bookingRepository->update($data, $booking->id);
+
+        if (! $updated) {
+            throw ValidationException::withMessages([
+                'booking' => ['Booking could not be updated.'],
+            ]);
+        }
 
         $updatedBooking = $this->bookingRepository->find($booking->id);
 
