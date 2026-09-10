@@ -25,7 +25,9 @@ class BookingEventTest extends TestCase
         Queue::fake();
         $this->swapPaymobClient();
 
-        $booking = Booking::factory()->create();
+        $booking = Booking::factory()->create([
+            'status' => 'pending',
+        ]);
         $this->actingAs(Customer::query()->findOrFail($booking->customer_id), 'sanctum')
             ->post(route('bookings.update', $booking), ['status' => 'confirmed'])
             ->assertOk();
@@ -41,7 +43,9 @@ class BookingEventTest extends TestCase
     {
         Queue::fake();
 
-        $booking = Booking::factory()->create();
+        $booking = Booking::factory()->create([
+            'status' => 'pending',
+        ]);
         $this->actingAs(Customer::query()->findOrFail($booking->customer_id), 'sanctum')
             ->post(route('bookings.update', $booking), ['status' => 'pending']);
 
