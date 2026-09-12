@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Exceptions\InvalidBookingStatusTransition;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreBookingRequest;
 use App\Http\Requests\UpdateBookingRequest;
@@ -48,11 +49,17 @@ class BookingController extends Controller
     {
         abort_if((int) $booking->customer_id !== (int) auth()->id(), 403);
 
-        $booking = DB::transaction(function () use ($request, $booking, $bookingService) {
-            $booking = $bookingService->updateExistingBooking($booking, $request->validated());
+        try {
+            $booking = DB::transaction(function () use ($request, $booking, $bookingService) {
+                $booking = $bookingService->updateExistingBooking($booking, $request->validated());
 
-            return $booking->fresh();
-        });
+                return $booking->fresh();
+            });
+        } catch (InvalidBookingStatusTransition $exception) {
+            throw ValidationException::withMessages([
+                'status' => [$exception->getMessage()],
+            ]);
+        }
 
         return response()->json([
             'success' => true,
