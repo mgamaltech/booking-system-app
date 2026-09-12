@@ -8,6 +8,7 @@ jobs:
   style:
     name: Code Style (Pint)
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
@@ -15,6 +16,9 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
+
+      - name: Configure Composer GitHub authentication
+        run: composer config --global github-oauth.github.com "${{ secrets.GITHUBTOKEN }}"
 
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist
@@ -22,9 +26,11 @@ jobs:
       - name: Run Pint
         run: ./vendor/bin/pint --test
 
+
   analyse:
     name: Static Analysis (PHPStan)
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
@@ -33,15 +39,20 @@ jobs:
         with:
           php-version: '8.4'
 
+      - name: Configure Composer GitHub authentication
+        run: composer config --global github-oauth.github.com "${{ secrets.GITHUBTOKEN }}"
+
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist
 
       - name: Run PHPStan
         run: vendor/bin/phpstan analyse
 
+
   tests:
     name: Tests (PHPUnit)
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
@@ -50,6 +61,9 @@ jobs:
         with:
           php-version: '8.4'
           extensions: pdo_sqlite
+
+      - name: Configure Composer GitHub authentication
+        run: composer config --global github-oauth.github.com "${{ secrets.GITHUBTOKEN }}"
 
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist
