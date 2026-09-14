@@ -8,14 +8,21 @@ use Exception;
 
 class GroupBookingStrategy implements BookingStrategyInterface
 {
-    /** @retrun  Booking $booking */
+    /**
+     * @param  array<string, mixed>  $data
+     */
     public function createBooking(array $data): Booking
     {
         if (! isset($data['max_participants'])) {
             throw new Exception('Max participants is required for group booking.');
         }
 
-        $slot = Slot::findOrFail($data['slot_id']);
+        $slotId = $data['slot_id'] ?? null;
+        if (! is_int($slotId)) {
+            throw new Exception('A valid slot id is required for group booking.');
+        }
+
+        $slot = Slot::query()->findOrFail($slotId);
 
         $status = $this->determineGroupBookingStatus($slot, $data);
 
@@ -29,6 +36,9 @@ class GroupBookingStrategy implements BookingStrategyInterface
         ]);
     }
 
+    /**
+     * @param  array<string, mixed>  $data
+     */
     private function determineGroupBookingStatus(Slot $slot, array $data): string
     {
         $currentParticipants = Booking::where('slot_id', $slot->id)

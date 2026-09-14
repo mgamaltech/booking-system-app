@@ -10,9 +10,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
-/**
- * @method static findOrFail(mixed $slot_id)
- */
 class Slot extends Model
 {
     /** @use HasFactory<SlotFactory> */
@@ -30,11 +27,17 @@ class Slot extends Model
         'date' => 'date',
     ];
 
+    /**
+     * @return HasMany<Booking, $this>
+     */
     public function bookings(): HasMany
     {
         return $this->hasMany(Booking::class);
     }
 
+    /**
+     * @return BelongsTo<\App\Models\Resource, $this>
+     */
     public function resource(): BelongsTo
     {
         return $this->belongsTo(Resource::class);

@@ -10,11 +10,15 @@ use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Validation\ValidationException;
 
 class BookingService
 {
     public function __construct(private BookingRepositoryInterface $bookingRepository) {}
 
+    /**
+     * @param  array<string, mixed>  $data
+     */
     public function createBooking(array $data): Booking
     {
         $type = $data['type'] ?? 'one-on-one';
@@ -23,6 +27,8 @@ class BookingService
     }
 
     /**
+     * @param  array<string, mixed>  $data
+     *
      * @throws LockTimeoutException
      */
     public function createBookingForCustomer(array $data, int $customerId): Booking
@@ -34,31 +40,40 @@ class BookingService
         return Cache::lock("slot:{$data['slot_id']}:book", $ttl)
             ->block($waitSeconds, function () use ($data) {
                 $booking = $this->createBooking($data);
-                SendBookingConfirmation::dispatchIf(
-                    $booking->status === 'confirmed',
-                    $booking,
-                )->afterCommit();
+                if ($booking->status === 'confirmed') {
+                    SendBookingConfirmation::dispatch($booking)->afterCommit();
+                }
 
                 return $booking;
             });
     }
 
+    /**
+     * @param  array<string, mixed>  $data
+     */
     public function updateBooking(array $data, int $id): bool
     {
         return $this->bookingRepository->update($data, $id);
     }
 
+    /**
+     * @param  array<string, mixed>  $data
+     */
     public function updateExistingBooking(Booking $booking, array $data): Booking
     {
-        // Route model binding already loaded this row. Updating it directly avoids
-        // re-reading the booking and all three globally eager-loaded relations.
-        $booking->update($data);
+        $updated = $booking->update($data);
+
+        if (! $updated) {
+            throw ValidationException::withMessages([
+                'booking' => ['Booking could not be updated.'],
+            ]);
+        }
+
         $updatedBooking = $booking->refresh()->loadMissing(['slot', 'resource', 'customer']);
 
-        SendBookingConfirmation::dispatchIf(
-            $updatedBooking->status === 'confirmed',
-            $updatedBooking,
-        )->afterCommit();
+        if ($updatedBooking->status === 'confirmed') {
+            SendBookingConfirmation::dispatch($updatedBooking)->afterCommit();
+        }
 
         return $updatedBooking;
     }
@@ -68,6 +83,9 @@ class BookingService
         return $this->bookingRepository->delete($id);
     }
 
+    /**
+     * @return LengthAwarePaginator<int, Booking>
+     */
     public function getAllBookings(): LengthAwarePaginator
     {
         return $this->bookingRepository->all();
@@ -78,11 +96,17 @@ class BookingService
         return $this->bookingRepository->find($id);
     }
 
+    /**
+     * @return Collection<int, Booking>
+     */
     public function getBookingForReminder(int $daysBeforeReminder): Collection
     {
         return $this->bookingRepository->getBookingForReminder($daysBeforeReminder);
     }
 
+    /**
+     * @return Collection<int, Booking>
+     */
     public function claimBookingReminders(int $daysBeforeReminder): Collection
     {
         return $this->bookingRepository->claimBookingReminders($daysBeforeReminder);
