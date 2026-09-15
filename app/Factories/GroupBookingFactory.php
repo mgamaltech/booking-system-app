@@ -14,7 +14,12 @@ class GroupBookingFactory implements BookingFactoryInterface
             throw new Exception('Max participants is required for group booking.');
         }
 
-        $slot = Slot::findOrFail($data['slot_id']);
+        $slotId = $data['slot_id'] ?? null;
+        if (! is_int($slotId)) {
+            throw new Exception('A valid slot id is required for group booking.');
+        }
+
+        $slot = Slot::query()->findOrFail($slotId);
 
         $status = $this->determineGroupBookingStatus($slot, $data);
 
@@ -30,6 +35,11 @@ class GroupBookingFactory implements BookingFactoryInterface
         return $booking;
     }
 
+    /**
+     * @param  array<string, mixed>  $data
+     *
+     * @throws Exception
+     */
     private function determineGroupBookingStatus(Slot $slot, array $data): string
     {
         $currentParticipants = Booking::where('slot_id', $slot->id)

@@ -15,11 +15,36 @@ use Illuminate\Queue\Events\JobQueued;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 
+/**
+ * @phpstan-type EndpointMetric array{
+ *     latency_ms: list<float>,
+ *     queries: int,
+ *     query_ms: float,
+ *     cache_hits: int,
+ *     cache_misses: int,
+ *     jobs: int,
+ *     external_requests: int,
+ *     statuses: list<int>
+ * }
+ * @phpstan-type EndpointSummary array{
+ *     queries: int,
+ *     query_ms: float,
+ *     cache_hits: int,
+ *     cache_misses: int,
+ *     jobs: int,
+ *     external_requests: int,
+ *     statuses: list<int>,
+ *     latency_p50_ms: float,
+ *     latency_p95_ms: float,
+ *     queries_per_request: float,
+ *     query_ms_per_request: float
+ * }
+ */
 class ProfileBookingEndpoints extends Command
 {
     private ?string $activeEndpoint = null;
 
-    /** @var array<string, array<string, mixed>> */
+    /** @var array<string, EndpointMetric> */
     private array $metrics = [];
 
     protected $signature = 'profile:booking-endpoints {--iterations=10} {--output=storage/app/profiling/latest.json}';
@@ -46,11 +71,12 @@ class ProfileBookingEndpoints extends Command
         }
 
         DB::listen(function ($query): void {
-            if ($this->activeEndpoint === null) {
+            $endpoint = $this->activeEndpoint;
+            if ($endpoint === null || ! isset($this->metrics[$endpoint])) {
                 return;
             }
-            $this->metrics[$this->activeEndpoint]['queries']++;
-            $this->metrics[$this->activeEndpoint]['query_ms'] += $query->time;
+            $this->metrics[$endpoint]['queries']++;
+            $this->metrics[$endpoint]['query_ms'] += $query->time;
         });
         Event::listen(CacheHit::class, function (): void {
             if ($this->activeEndpoint !== null) {
@@ -74,13 +100,20 @@ class ProfileBookingEndpoints extends Command
         });
 
         for ($i = 0; $i < $iterations; $i++) {
+            $freeSlot = $freeSlots->get($i);
+            if ($freeSlot === null) {
+                $this->error('A free slot disappeared while the profiling workload was running.');
+
+                return self::FAILURE;
+            }
+
             $this->measure($kernel, 'POST /api/login', Request::create('/api/login', 'POST', [
                 'email' => 'profile@example.test', 'password' => 'profile-password',
             ]));
 
             $this->measure($kernel, 'POST /api/booking', Request::create('/api/booking', 'POST', [
                 'customer_id' => $customer->id, 'resource_id' => $booking->resource_id,
-                'slot_id' => $freeSlots[$i]->id, 'type' => 'one-on-one',
+                'slot_id' => $freeSlot->id, 'type' => 'one-on-one',
             ], [], [], ['HTTP_ACCEPT' => 'application/json', 'HTTP_AUTHORIZATION' => "Bearer {$token}"]));
 
             $this->measure($kernel, 'POST /api/booking/{id}/update', Request::create("/api/booking/{$booking->id}/update", 'POST', [
@@ -115,6 +148,10 @@ class ProfileBookingEndpoints extends Command
         $this->activeEndpoint = null;
     }
 
+    /**
+     * @param  array<string, EndpointMetric>  $metrics
+     * @return array<string, EndpointSummary>
+     */
     private function summarize(array $metrics, int $iterations): array
     {
         foreach ($metrics as &$row) {
