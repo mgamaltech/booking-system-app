@@ -18,11 +18,9 @@ class BookingController extends Controller
     public function store(StoreBookingRequest $request, BookingService $bookingService): JsonResponse
     {
         try {
-            $booking = DB::transaction(function () use ($request, $bookingService) {
-                $booking = $bookingService->createBookingForCustomer($request->validated(), (int) auth()->id());
-
-                return $booking->fresh();
-            });
+            $booking = $bookingService
+                ->createBookingForCustomer($request->validated(), (int) auth()->id())
+                ->fresh();
         } catch (LockTimeoutException) {
             return response()->json([
                 'success' => false,
